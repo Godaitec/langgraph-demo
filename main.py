@@ -1,83 +1,95 @@
 import os
+from typing import TypedDict
 from dotenv import load_dotenv
 
-# 1. Import the specific components we need
+# LangGraph & Google Imports
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# 2. Load Environment Variables (API Key)
+# LangGraph Imports
+from langgraph.graph import StateGraph, START, END
+
+# 1. Load Environment Variables
 load_dotenv()
 
-if not os.getenv("GOOGLE_API_KEY"):
-    print("Error: GOOGLE_API_KEY not found in .env file")
-    exit()
+# ---------------------------------------------------------
+# STEP 1: DEFINE THE STATE
+# ---------------------------------------------------------
+# The State is a dictionary that flows through the graph nodes.
+class GraphState(TypedDict):
+    topic: str
+    summary: str
 
 # ---------------------------------------------------------
-# STEP A: THE MODEL (The Brain)
+# STEP 2: DEFINE THE NODES (Functions)
 # ---------------------------------------------------------
-# We allow specific parameters like 'temperature' to control creativity (0 to 1).
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0.7 
-)
+def call_model(state: GraphState):
+    """
+    Node logic: Takes the topic from state, calls LLM, and updates the summary.
+    """
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0.7 
+    )
+    
+    template = """
+    You are a helpful expert assistant. 
+    Please write a short, 3-bullet-point summary about the following topic:
+
+    Topic: {topic}
+
+    Ensure the tone is professional and clear.
+    """
+    
+    # We combine the logic here into one node
+    chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
+    
+    response = chain.invoke({"topic": state["topic"]})
+    
+    # Return the updated state
+    return {"summary": response}
 
 # ---------------------------------------------------------
-# STEP B: THE PROMPT TEMPLATE (The Instructions)
+# STEP 3: BUILD THE GRAPH
 # ---------------------------------------------------------
-# This template tells the AI *how* to behave, regardless of what the user asks.
-# We use {topic} as a placeholder variable that we will fill in later.
-template = """
-You are a helpful expert assistant. 
-Please write a short, 3-bullet-point summary about the following topic:
+workflow = StateGraph(GraphState)
 
-Topic: {topic}
+# Add our single node
+workflow.add_node("summarizer", call_model)
 
-Ensure the tone is professional and clear.
-"""
+# Define the flow (Edges)
+workflow.add_edge(START, "summarizer")
+workflow.add_edge("summarizer", END)
 
-prompt = PromptTemplate.from_template(template)
-
-# ---------------------------------------------------------
-# STEP C: THE OUTPUT PARSER (The Formatter)
-# ---------------------------------------------------------
-# The AI normally returns a complex "Message" object. 
-# This parser automatically extracts just the string text from it.
-parser = StrOutputParser()
+# Compile the graph into an executable app
+app = workflow.compile()
 
 # ---------------------------------------------------------
-# STEP D: THE CHAIN (The Pipeline)
+# STEP 4: EXECUTION
 # ---------------------------------------------------------
-# This uses the modern "|" operator to pipe data from one step to the next.
-# Data Flow: Input -> Prompt -> Model -> Parser -> Output
-chain = prompt | llm | parser
 
-# ---------------------------------------------------------
-# STEP E: EXECUTION (The Interaction)
-# ---------------------------------------------------------
+
 def main():
-    print("--- AI Summary Generator ---")
+    print("--- LangGraph Summary Generator ---")
     print("Type 'quit' to exit.")
     
     while True:
-        # 1. Get user input
         user_input = input("\nEnter a topic: ")
         
-        # 2. Check for exit
         if user_input.lower() in ["quit", "exit"]:
-            print("Exiting program.")
             break
             
         print(f"Generating summary for '{user_input}'...")
         
         try:
-            # 3. Invoke the chain
-            # We pass a dictionary matching the variable '{topic}' in our template
-            response = chain.invoke({"topic": user_input})
+            # We pass the initial state to the graph
+            # 'app.invoke' runs the graph until it reaches the END node
+            initial_state = {"topic": user_input}
+            final_output = app.invoke(initial_state)
             
-            # 4. Print clean output
             print("\nResult:")
-            print(response)
+            print(final_output["summary"])
             print("-" * 30)
             
         except Exception as e:

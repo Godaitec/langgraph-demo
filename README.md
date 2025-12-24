@@ -1,6 +1,6 @@
-# LangChain App (starter)
+# LangGraph App (starter)
 
-This repository is a small starter project for working with LangChain and related GenAI integrations.
+This repository is a small starter project for working with LangGraph and related GenAI integrations.
 
 > Note: At the moment I couldn't find any source files (only a `venv/` directory). This README and the `.github/copilot-instructions.md` are templates to help maintainers scaffold the project.
 
@@ -41,7 +41,7 @@ GOOGLE_API_KEY=...
 ## Discovered dependencies 🔍
 This repo's notes mentioned these packages; they're included in `requirements.txt`:
 
-- `langchain`
+- `langgraph`
 - `langchain-google-genai`
 - `python-dotenv`
 
